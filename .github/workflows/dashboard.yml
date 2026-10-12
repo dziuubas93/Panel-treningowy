@@ -32,28 +32,13 @@ jobs:
           INTERVALS_ATHLETE_ID: ${{ secrets.INTERVALS_ATHLETE_ID }}
         run: python3 sezon.py
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
       - name: Zaszyfruj hasłem
         env:
           DASHBOARD_PASSWORD: ${{ secrets.DASHBOARD_PASSWORD }}
         run: |
-          test -n "$DASHBOARD_PASSWORD" || { echo "Brak sekretu DASHBOARD_PASSWORD"; exit 1; }
-          npx --yes staticrypt@3.5.0 dashboard.html -p "$DASHBOARD_PASSWORD" --short -d public \
-            --remember 30 \
-            --template-title "dziubek cycling" \
-            --template-instructions "Panel treningowy" \
-            --template-placeholder "Hasło" \
-            --template-button "Wejdź" \
-            --template-remember "Zapamiętaj na 30 dni" \
-            --template-error "Złe hasło" \
-            --template-color-primary "#EC7FA9" \
-            --template-color-secondary "#13233F"
-          mv public/dashboard.html public/index.html
-          echo "User-agent: *" > public/robots.txt
-          echo "Disallow: /" >> public/robots.txt
+          pip install --quiet cryptography==43.0.3
+          python3 szyfruj.py dashboard.html public/index.html
+          printf "User-agent: *\nDisallow: /\n" > public/robots.txt
 
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -57,7 +57,8 @@ def load_env():
 def api_get(path, params, key):
     url = API + path + "?" + urllib.parse.urlencode(params)
     token = base64.b64encode(("API_KEY:" + key).encode()).decode()
-    req = urllib.request.Request(url, headers={"Authorization": "Basic " + token, "Accept": "application/json"})
+    req = urllib.request.Request(url, headers={"Authorization": "Basic " + token, "Accept": "application/json",
+                                               "User-Agent": "dziubek-panel/1.0"})
     with urllib.request.urlopen(req, timeout=60) as r:
         return json.loads(r.read().decode("utf-8"))
 
@@ -78,8 +79,10 @@ def fetch_all(cfg):
             print("  ok   " + name)
         except urllib.error.HTTPError as e:
             print("  BŁĄD %s: HTTP %s %s" % (name, e.code, e.reason))
-            if e.code in (401, 403):
-                sys.exit("Klucz API nie działa (401/403). Sprawdź .env.")
+            if e.code == 401:
+                sys.exit("Klucz API nie działa (401). Sprawdź INTERVALS_API_KEY.")
+            if e.code == 403:
+                sys.exit("intervals.icu odmówił dostępu (403) – zły INTERVALS_ATHLETE_ID albo blokada zapytania.")
             data[name] = None
 
     print("Pobieram z intervals.icu…")

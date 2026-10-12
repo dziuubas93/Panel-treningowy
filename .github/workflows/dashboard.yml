@@ -1,0 +1,70 @@
+name: Dashboard
+
+on:
+  schedule:
+    - cron: "0 4 * * *"   # codziennie ok. 5-6 rano czasu polskiego
+  workflow_dispatch:       # przycisk "Run workflow" do ręcznego odświeżenia
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Pobierz dane i zbuduj dashboard
+        env:
+          INTERVALS_API_KEY: ${{ secrets.INTERVALS_API_KEY }}
+          INTERVALS_ATHLETE_ID: ${{ secrets.INTERVALS_ATHLETE_ID }}
+        run: python3 sezon.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Zaszyfruj hasłem
+        env:
+          DASHBOARD_PASSWORD: ${{ secrets.DASHBOARD_PASSWORD }}
+        run: |
+          test -n "$DASHBOARD_PASSWORD" || { echo "Brak sekretu DASHBOARD_PASSWORD"; exit 1; }
+          npx --yes staticrypt@3.5.0 dashboard.html -p "$DASHBOARD_PASSWORD" --short -d public \
+            --remember 30 \
+            --template-title "dziubek cycling" \
+            --template-instructions "Panel treningowy" \
+            --template-placeholder "Hasło" \
+            --template-button "Wejdź" \
+            --template-remember "Zapamiętaj na 30 dni" \
+            --template-error "Złe hasło" \
+            --template-color-primary "#EC7FA9" \
+            --template-color-secondary "#13233F"
+          mv public/dashboard.html public/index.html
+          echo "User-agent: *" > public/robots.txt
+          echo "Disallow: /" >> public/robots.txt
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

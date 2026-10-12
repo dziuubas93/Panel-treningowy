@@ -1,0 +1,21 @@
+{
+  "athlete_id": "0",
+
+  "sezon": { "od": "2025-10-13", "do": "2026-10-18" },
+
+  "porownanie": [
+    { "nazwa": "Lato 2025", "od": "2025-06-01", "do": "2025-09-15" },
+    { "nazwa": "Lato 2026", "od": "2026-06-01", "do": "2026-09-15" }
+  ],
+
+  "waga_kg": null,
+  "aet_jako_procent_cp": 0.78,
+  "map_sekundy": 300,
+
+  "dluga_jazda_godziny": 3.0,
+  "spokojna_za_mocna_if": 0.75,
+  "spokojna_za_mocna_procent_powyzej_aet": 0.20,
+
+  "wzorce_spokojnych": "endurance|spokojn|recovery|rozjazd|regener|baza|tlen|z2|poranna jazda|popołudniowa jazda|wieczorna jazda",
+  "wzorce_wyscigow": "wyścig|wyscig|race|gravel 1|robinsonada|romgaz|maraton|zawody"
+}

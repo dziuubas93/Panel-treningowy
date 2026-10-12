@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Podsumowanie sezonu</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #F7F4EE; --card: #FFFFFF; --line: #E7E1D6; --grid: #EEE9E0;
+  --ink: #13233F; --ink2: #4A5568; --muted: #8A8F98; --accent: #EC7FA9;
+  --good: #1F8A4C; --bad: #C0392B;
+  --z-baza: #2F7FE0; --z-tempo: #22A05A; --z-prog: #E9B93A; --z-vo2: #F0883A;
+  --z-beztlen: #E0484F; --z-sila: #5A5A5A; --z-inne: #D9CDBB;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F1726; --card: #17213A; --line: #26314D; --grid: #222C45;
+    --ink: #F3EDE3; --ink2: #C3C8D2; --muted: #8B93A5;
+    --good: #4CC27F; --bad: #FF7A6E;
+    --z-baza: #4F95F0; --z-tempo: #3DBB72; --z-prog: #F0C75A; --z-vo2: #F59A55;
+    --z-beztlen: #F06368; --z-sila: #9AA0AA; --z-inne: #6E6556;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, "Inter", system-ui, sans-serif; }
+main { max-width: 1180px; margin: 0 auto; padding: 32px 16px 64px; }
+h1 { font-size: 28px; margin: 0 0 4px; letter-spacing: -0.01em; }
+h2 { font-size: 19px; margin: 0 0 4px; font-style: italic; font-weight: 600; }
+.sub { color: var(--ink2); margin: 0 0 24px; }
+.hint { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 24px; margin-bottom: 20px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.kpi { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+.kpi b { display: block; font-size: 26px; font-variant-numeric: tabular-nums; }
+.kpi span { color: var(--ink2); font-size: 13px; }
+.chart { position: relative; height: 340px; }
+.chart.small { height: 240px; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th { text-align: left; font-weight: 500; color: var(--ink2); font-size: 13px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+td { padding: 10px; border-bottom: 1px solid var(--grid); }
+.scroll { overflow-x: auto; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; vertical-align: 0; }
+.up { color: var(--good); } .down { color: var(--bad); }
+.bar3 { display: flex; height: 18px; border-radius: 9px; overflow: hidden; gap: 2px; margin: 12px 0 8px; }
+.legend3 { display: flex; flex-wrap: wrap; gap: 16px; color: var(--ink2); font-size: 13px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } }
+.empty { color: var(--muted); font-style: italic; }
+.demo { background: var(--accent); color: #13233F; border-radius: 10px; padding: 8px 14px; margin-bottom: 16px; font-weight: 500; }
+details summary { cursor: pointer; color: var(--ink2); }
+</style>
+</head>
+<body>
+<main id="app"></main>
+<script>
+const D = /*__DANE__*/null;
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const COLORS = { baza: '--z-baza', tempo: '--z-tempo', prog: '--z-prog', vo2: '--z-vo2', beztlen: '--z-beztlen', sila: '--z-sila', inne: '--z-inne' };
+const col = k => css(COLORS[k]);
+const hm = s => { const m = Math.round(s / 60); return Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0'); };
+const fmtD = iso => { const [y, m, d] = iso.split('-'); return d + '.' + m; };
+const num = (v, d = 0) => v == null ? '–' : Number(v).toLocaleString('pl-PL', { minimumFractionDigits: d, maximumFractionDigits: d });
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function render() {
+  const k = D.kpi, app = document.getElementById('app');
+  const ctlTxt = k.ctl_start && k.ctl_teraz ? `${num(k.ctl_start)} → ${num(k.ctl_max)}` : '–';
+  const m = D.markery, a = m[0] || {}, b = m[m.length - 1] || {};
+  const rows = [['CP', 'cp', ' W', 0], ['AeT (szac.)', 'aet', ' W', 0], ['MAP (best ' + Math.round(D.config.map_s / 60) + ' min)', 'map', ' W', 0],
+                ['VO2max (szac.)', 'vo2', '', 1], ["W'", 'wprime', ' kJ', 1], ['Best 20 min', 'p20', ' W', 0], ['Waga', 'waga', ' kg', 'neutral']];
+  const delta = (x, y, d) => (x == null || y == null) ? '' : (() => { const v = y - x; const c = d === 'neutral' ? '' : v > 0 ? 'up' : v < 0 ? 'down' : ''; d = d === 'neutral' ? 1 : d; return `<span class="${c}">${v > 0 ? '+' : ''}${num(v, d)}</span>`; })();
+
+  app.innerHTML = `
+    ${D.demo ? '<div class="demo">Tryb demo – dane przykładowe, nie Twoje treningi.</div>' : ''}
+    <h1>Podsumowanie sezonu</h1>
+    <p class="sub">${fmtD(D.sezon.od)}.${D.sezon.od.slice(0, 4)} – ${fmtD(D.sezon.do)}.${D.sezon.do.slice(0, 4)} · wygenerowano ${D.wygenerowano}</p>
+
+    <div class="kpis">
+      <div class="kpi"><b>${k.rower_h} h</b><span>na rowerze</span></div>
+      <div class="kpi"><b>${k.sila_h} h</b><span>siłownia · ${k.sila_n} sesji</span></div>
+      <div class="kpi"><b>${k.ponizej_aet}%</b><span>czasu jazdy poniżej AeT</span></div>
+      <div class="kpi"><b>${k.dlugie}</b><span>jazd ≥ ${D.config.dluga_h} h</span></div>
+      <div class="kpi"><b>${ctlTxt}</b><span>fitness (CTL) start → szczyt</span></div>
+    </div>
+
+    <section class="card">
+      <h2>Co poszło do przodu</h2>
+      <p class="hint">CP i W' dopasowane z krzywej mocy (najlepsze wysiłki 3–20 min). AeT ≈ ${Math.round(D.config.aet_pct * 100)}% CP, VO2max = 10,8 × MAP/kg + 7 – to szacunki, nie wynik testu.</p>
+      <div class="scroll"><table>
+        <tr><th></th>${m.map(p => `<th>${esc(p.nazwa)}</th>`).join('')}<th>Zmiana</th></tr>
+        ${rows.map(([l, key, u, d]) => `<tr><td>${l}</td>${m.map(p => `<td>${p[key] == null ? '–' : num(p[key], d === 'neutral' ? 1 : d) + u}</td>`).join('')}<td>${delta(a[key], b[key], d)}</td></tr>`).join('')}
+      </table></div>
+    </section>
+
+    <section class="card">
+      <h2>Tygodnie wg bodźca</h2>
+      <p class="hint">Obciążenie każdej jazdy rozdzielone na strefy mocy (z wagą intensywności²). Siła i inne sporty – obciążenie z intervals.icu.</p>
+      <div class="chart"><canvas id="cStim"></canvas></div>
+      <div class="scroll" style="margin-top:20px"><table>
+        <tr><th>Bodziec</th><th>Obciążenie</th><th>% obciążenia</th><th>Czas</th><th>kJ/kg</th></tr>
+        ${D.stimuli.map(s => { const v = D.bodzce[s]; return `<tr><td><span class="dot" style="background:${col(s)}"></span>${D.stimulus_label[s]}</td><td>${num(v.load)}</td><td>${v.pct}%</td><td>${hm(v.secs)} h</td><td>${num(v.kjkg, 1)}</td></tr>`; }).join('')}
+      </table></div>
+      <p class="hint" style="margin-top:12px">Treningi wg głównego bodźca: ${Object.entries(D.kategorie).map(([c, n]) => `${c} ${n}`).join(', ')}.</p>
+    </section>
+
+    <section class="card">
+      <h2>Rozkład intensywności</h2>
+      <p class="hint">Czas jazdy: do AeT (Z1-Z2), AeT–CP (Z3-Z4), powyżej CP (Z5-Z7).</p>
+      <div class="chart small"><canvas id="cDist"></canvas></div>
+      <h3 style="font-size:15px;margin:20px 0 0;font-style:italic">Cały okres</h3>
+      <div class="bar3" id="bar3"></div>
+      <div class="legend3" id="leg3"></div>
+    </section>
+
+    <section class="card">
+      <h2>Ile ciało przyjmuje</h2>
+      <p class="hint">Fitness (CTL, 42 dni) i zmęczenie (ATL, 7 dni) z intervals.icu.</p>
+      <div class="chart small"><canvas id="cCtl"></canvas></div>
+    </section>
+
+    <section class="card">
+      <h2>Starty</h2>
+      ${D.starty.length || D.nadchodzace.length ? `<div class="scroll"><table>
+        <tr><th>Data</th><th>Start</th><th>Dystans</th><th>Przewyższenie</th><th>Czas</th><th>NP</th><th>IF</th></tr>
+        ${D.starty.map(r => `<tr><td>${fmtD(r.data)}</td><td>${esc(r.nazwa_startu)}</td><td>${r.km} km</td><td>${r.przewyzszenie} m</td><td>${hm(r.czas)}</td><td>${r.np ? num(r.np) + ' W' : '–'}</td><td>${num(r.if, 2)}</td></tr>`).join('')}
+        ${D.nadchodzace.map(r => `<tr><td>${fmtD(r.data)}</td><td>${esc(r.nazwa)}</td><td colspan="5" class="empty">przed nami</td></tr>`).join('')}
+      </table></div>` : '<p class="empty">Brak startów – oznacz je w intervals.icu jako wyścig albo dopisz nazwę do „wzorce_wyscigow” w config.json.</p>'}
+    </section>
+
+    <div class="grid2">
+      <section class="card">
+        <h2>Długie jazdy (≥ ${D.config.dluga_h} h)</h2>
+        ${list(D.dlugie, r => `${hm(r.czas)} h · ${r.km} km · ${esc(r.kategoria)}`, 'Brak długich jazd w tym okresie.')}
+      </section>
+      <section class="card">
+        <h2>Spokojne, które zrobiły się mocne</h2>
+        <p class="hint">Jazdy z „spokojną” nazwą, gdzie IF &gt; ${num(D.config.if_max, 2)} albo dużo czasu powyżej AeT.</p>
+        ${list(D.za_mocne, r => `IF ${num(r.if, 2)} · ${r.powyzej_aet}% powyżej AeT`, 'Nic – spokojne były spokojne.')}
+      </section>
+    </div>
+    ${k.bez_mocy ? `<p class="hint">${k.bez_mocy} jazd bez pomiaru mocy – policzone ze stref tętna albo w całości jako baza.</p>` : ''}
+  `;
+  drawCharts();
+}
+
+function list(arr, fn, empty) {
+  if (!arr.length) return `<p class="empty">${empty}</p>`;
+  return `<div class="scroll"><table>${arr.map(r => `<tr><td>${fmtD(r.data)}</td><td>${esc(r.nazwa)}</td><td style="color:var(--ink2)">${fn(r)}</td></tr>`).join('')}</table></div>`;
+}
+
+let charts = [];
+function drawCharts() {
+  charts.forEach(c => c.destroy()); charts = [];
+  const ink2 = css('--ink2'), grid = css('--grid'), card = css('--card');
+  Chart.defaults.color = ink2; Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+  const labels = D.tygodnie.map(w => fmtD(w.tydzien));
+  const axes = (stacked, max) => ({
+    x: { stacked, grid: { display: false }, ticks: { autoSkip: true, maxRotation: 0 } },
+    y: { stacked, grid: { color: grid }, border: { display: false }, max, ticks: max ? { callback: v => v + '%' } : {} },
+  });
+  const bar = (label, data, color) => ({ label, data, backgroundColor: color, borderColor: card, borderWidth: { top: 2 }, borderSkipped: false, borderRadius: 3, barPercentage: 0.8 });
+
+  charts.push(new Chart(document.getElementById('cStim'), {
+    type: 'bar',
+    data: { labels, datasets: D.stimuli.map(s => bar(D.stimulus_label[s], D.tygodnie.map(w => Math.round(w.stim[s])), col(s))) },
+    options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, scales: axes(true),
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 14, boxHeight: 3 } },
+        tooltip: { filter: i => i.raw > 0, footer: it => 'Razem: ' + it.reduce((s, i) => s + i.raw, 0) } } },
+  }));
+
+  const pct = (w, i) => { const t = w.z3[0] + w.z3[1] + w.z3[2]; return t ? Math.round(w.z3[i] / t * 100) : null; };
+  const zc = [col('baza'), col('prog'), col('beztlen')], zl = ['Do AeT (Z1-Z2)', 'AeT-CP (Z3-Z4)', 'Powyżej CP (Z5-Z7)'];
+  charts.push(new Chart(document.getElementById('cDist'), {
+    type: 'bar',
+    data: { labels, datasets: zl.map((l, i) => bar(l, D.tygodnie.map(w => pct(w, i)), zc[i])) },
+    options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, scales: axes(true, 100),
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 14, boxHeight: 3 } }, tooltip: { callbacks: { label: c => c.dataset.label + ': ' + c.raw + '%' } } } },
+  }));
+
+  const tot = D.rozklad.reduce((a, b) => a + b, 0) || 1;
+  document.getElementById('bar3').innerHTML = D.rozklad.map((s, i) => `<div title="${zl[i]}" style="flex:${s};background:${zc[i]}"></div>`).join('');
+  document.getElementById('leg3').innerHTML = D.rozklad.map((s, i) => `<span><span class="dot" style="background:${zc[i]}"></span>${zl[i]}: ${Math.round(s / tot * 100)}% (${hm(s)} h)</span>`).join('');
+
+  charts.push(new Chart(document.getElementById('cCtl'), {
+    type: 'line',
+    data: { labels: D.ctl.map(p => fmtD(p.d)), datasets: [
+      { label: 'Fitness (CTL)', data: D.ctl.map(p => p.ctl), borderColor: col('baza'), borderWidth: 2, pointRadius: 0, tension: 0.3 },
+      { label: 'Zmęczenie (ATL)', data: D.ctl.map(p => p.atl), borderColor: css('--accent'), borderWidth: 2, pointRadius: 0, tension: 0.3 },
+    ] },
+    options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 12, maxRotation: 0 } }, y: { grid: { color: grid }, border: { display: false } } },
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 14, boxHeight: 3 } } } },
+  }));
+}
+
+if (D) { render(); matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render); }
+else document.getElementById('app').textContent = 'To jest szablon – uruchom python3 sezon.py, żeby zbudować dashboard.html.';
+</script>
+</body>
+</html>

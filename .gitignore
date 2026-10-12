@@ -1,0 +1,5 @@
+.env
+cache/
+dashboard.html
+public/
+.DS_Store
